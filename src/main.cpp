@@ -41,9 +41,93 @@ unsigned long recieveCounter = 0;
 byte connectionStrength = 0;
 Metro metroCommunication = Metro(READ_INTERVAL);
 Metro metroController = Metro(SIGNAL_CHECK_INTERVAL);
-Metro metroHasController = Metro(750); // was 500
+Metro metroHasController = Metro(500); // was 500
 
 bool controllerIsEnabledAndRegistered = false;
+
+
+bool usingDefaultAddress()
+{
+
+  if (currentAddresses[0][0] == defaultAddresses[0][0] && currentAddresses[0][1] == defaultAddresses[0][1] && currentAddresses[0][2] == defaultAddresses[0][2] &&  currentAddresses[0][3] == defaultAddresses[0][3])
+  {
+    return true;
+  }
+  return false;
+}
+
+void printAddresses()
+{
+  Serial.println();
+  Serial.print("Radio.h READ ADDRESS :: ");
+  Serial.print(currentAddresses[0][0]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][1]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][2]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][3]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][4]);
+  Serial.print(" | ");
+
+  Serial.println();
+  Serial.print("Radio.h Write ADDRESS :: ");
+  Serial.print(currentAddresses[1][0]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][1]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][2]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][3]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][4]);
+  Serial.print(" | ");
+  Serial.println();
+
+}
+
+void printRequestPacket(ControlPacket* requestPacket)
+{
+  Serial.println("Current Request:: ");
+  Serial.print(requestPacket->Id);
+  Serial.print(" ");
+  Serial.print(requestPacket->Command);
+  Serial.print(" ");
+  Serial.print(requestPacket->Value1);
+  Serial.print(" ");
+  Serial.print(requestPacket->Value2);
+  Serial.print(" ");
+  Serial.print(requestPacket->Value3);
+  Serial.print(" ");
+  Serial.print(requestPacket->Value4);
+  Serial.print(" ");
+  Serial.print(requestPacket->Value5);
+  Serial.print(" ");
+  Serial.println();
+}
+
+void printResponsePacket(ControlPacket* responsePacket)
+{
+  Serial.println("Packet Response:: ");
+  Serial.print(responsePacket->Id);
+  Serial.print(" ");
+  Serial.print(responsePacket->Command);
+  Serial.print(" ");
+  Serial.print(responsePacket->Value1);
+  Serial.print(" ");
+  Serial.print(responsePacket->Value2);
+  Serial.print(" ");
+  Serial.print(responsePacket->Value3);
+  Serial.print(" ");
+  Serial.print(responsePacket->Value4);
+  Serial.print(" ");
+  Serial.print(responsePacket->Value5);
+  Serial.print(" ");
+  Serial.println();
+}
+
+
 
 void openPipes()
 {
@@ -98,10 +182,10 @@ void readJoystick()
   //controllerSteer = readAnalogSensorPin();
 
   Serial.print("SPEED ::: ");
-  Serial.print(controllerSpeed / 4);
+  Serial.println(controllerSpeed / 4);
 
 
-  Serial.print("  STEER ::: ");
+  //Serial.print("  STEER ::: ");
   //Serial.print(controllerSteer / 4);
   Serial.println();
   // controllerEnabled = !digitalRead(16);
@@ -128,12 +212,12 @@ bool tryReadBytes(::ControlPacket* data)
     success = true;
     controllerConnected = true;
     metroHasController.reset();
-    Serial.println("ReadBytes:");
-    Serial.println(packetSize);
+    //Serial.println("ReadBytes:");
+    //Serial.println(packetSize);
     myRadio.read(data, packetSize);
 
-    Serial.println("DIFF");
-    Serial.println(max(data -> Id, lastPacketId) - min(data -> Id, lastPacketId));
+    //Serial.println("DIFF");
+    //Serial.println(max(data -> Id, lastPacketId) - min(data -> Id, lastPacketId));
     if (max(data -> Id, lastPacketId) - min(data -> Id, lastPacketId) > 5 )//TODOSet to some realistic good value
     {
       //We have some connection issues
@@ -144,20 +228,7 @@ bool tryReadBytes(::ControlPacket* data)
     else
       lastPacketId = data -> Id;
 
-    Serial.print("Packet recieved:");
-    Serial.print(data -> Id);
-    Serial.print(" ");
-    Serial.print(data -> Command);
-    Serial.print(" ");
-    Serial.print(data -> Value1);
-    Serial.print(" ");
-    Serial.print(data -> Value2);
-    Serial.print(" ");
-    Serial.print(data -> Value3);
-    Serial.print(" ");
-    Serial.print(data -> Value4);
-    Serial.print(" ");
-    Serial.println(data -> Value5);
+    printResponsePacket(data);
   }
   else
   {
@@ -169,48 +240,19 @@ bool tryReadBytes(::ControlPacket* data)
 bool tryWriteBytes(::ControlPacket data)
 {
 
-  Serial.println("** Writing to addres:: **");
-
-  Serial.print("Current Addrresses [0] (write address): ");
-  Serial.print(currentAddresses[0][0]);
-  Serial.print(" ");
-  Serial.print(currentAddresses[0][1]);
-  Serial.print(" ");
-  Serial.print(currentAddresses[0][2]);
-  Serial.print(" ");
-  Serial.print(currentAddresses[0][3]);
-  Serial.print(" ");
-  Serial.print(currentAddresses[0][4]);
-
-  Serial.println();
+  printAddresses();
 
   bool success = false;
   data.Id = sendCount;
   //Dont listen while writing
   myRadio.stopListening();
-  Serial.println("tryWriteBytes");
+  //Serial.println("tryWriteBytes");
   //if (true)
   if (myRadio.write(&data, packetSize, 1))
   {
     sendCount++;
     success = true;
-    Serial.print("Packet sent:");
-    Serial.print(data.Id);
-    Serial.print(" ");
-    Serial.print(data.Command);
-    Serial.print(" ");
-    Serial.print(data.Value1);
-    Serial.print(" ");
-    Serial.print(data.Value2);
-    Serial.print(" ");
-    Serial.print(data.Value3);
-    Serial.print(" ");
-    Serial.print(data.Value4);
-    Serial.print(" ");
-    Serial.println(data.Value5);
-
-    Serial.println("WriteBytes:");
-    Serial.println(packetSize);
+    printRequestPacket(&data);
   }
   else
   {
@@ -259,12 +301,12 @@ void handleRead()
       channelFound = packet.Value1;
       sendCommand = 25;
     }
-    else if (packet.Command == 40)
+    else if (packet.Command == 40 && !usingDefaultAddress())
     {
       Serial.println("Stand Idle Command 40");
       sendCommand = 44;
     }
-    else if (packet.Command == 50 )
+    else if (packet.Command == 50 && !usingDefaultAddress())
     {
       //Controller input requested
       recieveCounter++;
@@ -402,11 +444,11 @@ void loop()
   {
     if (metroCommunication.check() == 1)
     {
-      Serial.print(" Millis: ");
-      Serial.println(millis() - m);
+      //Serial.print(" Millis: ");
+      //Serial.println(millis() - m);
       m = millis();
-      Serial.print(" recieveCounter : ");
-      Serial.println(recieveCounter );
+      //Serial.print(" recieveCounter : ");
+      //Serial.println(recieveCounter );
       //Serial.println("*************START READING*************");
       handleRead();
       //Serial.println("*************END READING*************");
@@ -419,44 +461,18 @@ void loop()
         recieveCounter = 0;
       }
       //Serial.print("connectionStrength ");
-      Serial.println(connectionStrength);
+      //Serial.println(connectionStrength);
       //Serial.println("*************START WRITING*************");
       handleWrite();
       //Serial.println("*************END READING*************");
       if (metroHasController.check() == 1) {
         //Check if we had connection problems
+        Serial.println(":::::::::::::::::::::::::");
+        Serial.println("CONNECTION LOST TO NunchuckController");
+        Serial.println(":::::::::::::::::::::::::");
+
         resetConnection();
       }
-      Serial.println(" Read Address: ");
-      for (int i = 0; i < 5; i++)
-      {
-        Serial.print(currentAddresses[0][i]);
-        Serial.print(" ");
-      }
-      Serial.println();
-      Serial.println(" Write Address: ");
-      for (int i = 0; i < 5; i++)
-      {
-        Serial.print(currentAddresses[1][i]);
-        Serial.print(" ");
-      }
-      Serial.println();
-      Serial.println(" contollerId: ");
-      for (int i = 0; i < 5; i++)
-      {
-        Serial.print(contollerId[i]);
-        Serial.print(" ");
-      }
-      Serial.println(" ");
-      Serial.print(" Channel: ");
-      Serial.print(channelSelected);
-      Serial.println();
-      Serial.print(" sendCommand: ");
-      Serial.print(sendCommand);
-      Serial.println();
-      Serial.print(" controllerConnected: ");
-      Serial.println(controllerConnected);
-      Serial.println();
     }
   }
 }

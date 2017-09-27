@@ -11,6 +11,7 @@ class Radio {
 private:
   RF24* _radio;
   Metro* connectionLostTimer;
+  Metro* readInterval;
 
   // Connection defaults, flags and inits.
   byte defaultAddresses[2][6];
@@ -22,7 +23,7 @@ private:
   byte channelMax = 125;
   byte channelMin = 100;
   byte connectionStrength = 0;
-  bool handShaking = false;
+  bool handShaking  = false;
   byte packetSize   = 7;
   byte sendCount    = 0;
 
@@ -31,6 +32,7 @@ private:
 
   //Intervals
   byte _TIMEOUT_READ = 50;
+  byte _READ_INTERVAL = 10;
   unsigned int _LOST_CONNECTION = 500;
 
   byte lastPacketId = 0;
@@ -46,6 +48,11 @@ private:
   void openPipes();
   void resetConnection();
   void initPackets();
+  bool usingDefaultAddress();
+
+  // Controller
+  byte controllerId[6];
+  int controllerSample = -1;
 
 public:
   Radio();
@@ -57,6 +64,8 @@ public:
   // Read/Write packets
   bool tryReadBytes(RadioPacket* response);
   bool tryWriteBytes(RadioPacket* request);
+
+  void setControllerSample(int sample);
 
   // Debug
   void printRequestPacket();

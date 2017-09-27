@@ -3,7 +3,8 @@
 Radio::Radio() :
 defaultAddresses{"FM01R", "FM01W"},  // initialize defaultAddresses
 currentAddresses{"FM01R", "FM01W"},  // initialize currentAddresses
-foundAddresses{"FM000"}             // initialize foundAddresses
+foundAddresses{"FM000"},             // initialize foundAddresses
+controllerId{"s0xY2"}
 {
   _radio=  new RF24(10,15);
 }
@@ -14,6 +15,10 @@ void Radio::setup()
 
   //Setup Metro Interval
   this->connectionLostTimer = new Metro(_LOST_CONNECTION);
+  this->connectionLostTimer->reset();
+
+  this->readInterval = new Metro(_READ_INTERVAL);
+  this->readInterval->reset();
 
   // Setup NRF24.
   _radio->begin();
@@ -50,11 +55,19 @@ void Radio::setup()
 
 void Radio::processResponse()
 {
-  // TODO:: Make this thing into a switch.
 
-  if (responsePacket.Command = 1)
+  // TODO:: Make this thing into a switch.
+  Serial.println("processing response");
+  if (responsePacket.Command == 1)
   {
     Serial.println("Name requested by FMV");
+
+    requestPacket.Value1  = controllerId[0];
+    requestPacket.Value2  = controllerId[1];
+    requestPacket.Value3  = controllerId[2];
+    requestPacket.Value4  = controllerId[3];
+    requestPacket.Value5  = controllerId[4];
+
     requestPacket.Command = 5; // Send name.
   }
 
@@ -67,7 +80,7 @@ void Radio::processResponse()
     foundAddresses[3] = responsePacket.Value4;
     foundAddresses[4] = responsePacket.Value5;
 
-    // Changing to the new address.
+    // FMV Expects Confirmation on the new addrees
     this->setAddress(foundAddresses);
     this->openPipes();
 
@@ -76,15 +89,32 @@ void Radio::processResponse()
 
   else if (responsePacket.Command == 20)
   {
+
     Serial.println("Channel change requested");
     channelFound = responsePacket.Value1;
     setChannel(channelFound);
-
     requestPacket.Command = 25;
   }
+
+  else if (responsePacket.Command == 40 && !usingDefaultAddress())
+  {
+    Serial.println("Stay Idle Reqest");
+    requestPacket.Command = 44; // standing idle.
+  }
+
+  else if (responsePacket.Command == 50 && !usingDefaultAddress())
+  {
+    Serial.println("State Active. Sending Joytstick values");
+
+    requestPacket.Command = 55;
+    requestPacket.Value1  = 0; // not used for now.
+    requestPacket.Value2  = controllerSample; // Y-axis sample read.
+    requestPacket.Value3  = 0; // not used for now.
+    requestPacket.Value4  = 0; // not used for now.
+    requestPacket.Value5  = 0; // not used for now.
+  }
+
 }
-
-
 
 /**
   Method that reads and processes a responsePacket,
@@ -97,19 +127,24 @@ void Radio::readWrite()
     Serial.println("RF24 Failure Detected. Re-running the setup");
     this->setup();
   }
+  if (this->readInterval->check() == 1)
+  {
+    this->printAddresses();
+    Serial.println("Channel: " + (String)channelSelected);
+    if (this->tryReadBytes(&responsePacket)) { // Populates the responsePacket.
+      this->printResponsePacket();
+      delay(5);
+      this->processResponse();
+      this->printRequestPacket();
+    }
 
-  if (this->tryReadBytes(&responsePacket)) { // Populates the responsePacket.
-    this->printResponsePacket();
+    // Breathing space.
+    yield();
     delay(5);
-    this->processResponse();
+
+    // Write the requestPacket
+    this->tryWriteBytes(&requestPacket);
   }
-
-  // Breathing space.
-  yield();
-  delay(5);
-
-  // Write the requestPacket
-  this->tryWriteBytes(&requestPacket);
 }
 
 
@@ -265,6 +300,22 @@ void Radio::setAddress(byte address[])
 }
 
 /**
+  Checks if the currentAddress is the defaultAddress.
+*/
+bool Radio::usingDefaultAddress()
+{
+  if (currentAddresses[0][0] == defaultAddresses[0][0] &&
+      currentAddresses[0][1] == defaultAddresses[0][1] &&
+      currentAddresses[0][2] == defaultAddresses[0][2] &&
+      currentAddresses[0][3] == defaultAddresses[0][3])
+  {
+    return true;
+  }
+  return false;
+}
+
+
+/**
    Enable the current read/write addresses.
 */
 void Radio::openPipes()
@@ -307,10 +358,101 @@ void Radio::initPackets()
 
   // Init.
   requestPacket.Id      = 0;
-  requestPacket.Command = 1; // default command for seeking.
+  requestPacket.Command = 5; // default command for seeking.
   requestPacket.Value1  = 0;
   requestPacket.Value2  = 0;
   requestPacket.Value3  = 0;
   requestPacket.Value4  = 0;
   requestPacket.Value5  = 0;
+}
+
+
+/**
+  Sets the the controller sample value for it to be sent to the FMV.
+*/
+void Radio::setControllerSample(int sample)
+{
+  controllerSample = sample;
+}
+
+
+/*********
+  Set of print methods used for debugging purposes.
+*********/
+
+void Radio::printRequestPacket()
+{
+  Serial.println("CTRL sent request:: ");
+  Serial.print(requestPacket.Id);
+  Serial.print(" ");
+  Serial.print(requestPacket.Command);
+  Serial.print(" ");
+  Serial.print(requestPacket.Value1);
+  Serial.print(" ");
+  Serial.print(requestPacket.Value2);
+  Serial.print(" ");
+  Serial.print(requestPacket.Value3);
+  Serial.print(" ");
+  Serial.print(requestPacket.Value4);
+  Serial.print(" ");
+  Serial.print(requestPacket.Value5);
+  Serial.print(" ");
+
+  Serial.print("length: ");
+  Serial.println(packetSize);
+  Serial.println();
+}
+
+void Radio::printResponsePacket()
+{
+  Serial.println("CTRL received response :: ");
+  Serial.print(responsePacket.Id);
+  Serial.print(" ");
+  Serial.print(responsePacket.Command);
+  Serial.print(" ");
+  Serial.print(responsePacket.Value1);
+  Serial.print(" ");
+  Serial.print(responsePacket.Value2);
+  Serial.print(" ");
+  Serial.print(responsePacket.Value3);
+  Serial.print(" ");
+  Serial.print(responsePacket.Value4);
+  Serial.print(" ");
+  Serial.print(responsePacket.Value5);
+  Serial.print(" ");
+  Serial.println();
+
+  Serial.print("length: ");
+  Serial.println(packetSize);
+}
+
+void Radio::printAddresses()
+{
+  Serial.println();
+  Serial.print("CTRL READ address :: ");
+  Serial.print(currentAddresses[0][0]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][1]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][2]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][3]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[0][4]);
+  Serial.print(" | ");
+
+  Serial.println();
+  Serial.print("CTRL READ address :: ");
+  Serial.print(currentAddresses[1][0]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][1]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][2]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][3]);
+  Serial.print(" | ");
+  Serial.print(currentAddresses[1][4]);
+  Serial.print(" | ");
+  Serial.println();
+
 }

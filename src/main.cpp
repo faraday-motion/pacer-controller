@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include "Radio.h"
+#include "RadioHandshake.h"
 
 Radio radio;
+RadioHandshake radioHandshake(&radio);
 
 int readAnalogSensorPin(byte pin)
 {
@@ -21,12 +23,12 @@ void setup()
   delay(50);
   radio.setup();
 
+
   delay(50);
   pinMode(A0, INPUT_PULLUP); // y
 }
 
 void loop()
 {
-  radio.setControllerSample(readAnalogSensorPin(A0));
-  radio.readWrite();
+  radioHandshake.handleHandshake();
 }
